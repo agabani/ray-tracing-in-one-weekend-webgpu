@@ -1,5 +1,12 @@
 {
-  "cSpell.words": ["webgpu", "wgpu"],
+  "cSpell.words": [
+    "bytemuck",
+    "oneshot",
+    "webgpu",
+    "wgpu",
+    "wgsl",
+    "workgroups"
+  ],
   "files.associations": {
     "justfile": "makefile"
   }
