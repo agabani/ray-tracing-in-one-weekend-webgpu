@@ -1,18 +1,17 @@
-use ray_tracing_in_one_weekend_webgpu::{gpu, shaders::example};
+use ray_tracing_in_one_weekend_webgpu::{gpu, shaders::ray_tracer};
 
 #[tokio::main]
 async fn main() {
     let gpu = gpu::GPU::new().await.unwrap();
 
-    let shader = example::Shader::new(gpu);
+    let shader = ray_tracer::Shader::new(gpu);
 
-    let input = example::Type {
-        a: glam::Vec3::new(5.0, 4.0, 6.0),
-        arr: vec![45, 46, 47, 48, 49],
-        ..Default::default()
-    };
+    let output = shader.execute().await;
 
-    let output = shader.execute(&input).await;
-
-    println!("{:?}", output);
+    println!("P3");
+    println!("256 256");
+    println!("255");
+    for i in output.arr {
+        println!("{} {} {}", i.x, i.y, i.z);
+    }
 }

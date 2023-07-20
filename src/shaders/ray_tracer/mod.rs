@@ -1,16 +1,12 @@
 use encase::ShaderType;
-use wgpu::util::DeviceExt;
 
 use crate::gpu::GPU;
 
 #[derive(Debug, Default, encase::ShaderType)]
-pub struct Type {
+pub struct OutputType {
     pub array_length: encase::ArrayLength,
-    pub array_length_call_ret_val: u32,
-    pub a: glam::Vec3,
-    #[align(16)]
     #[size(runtime)]
-    pub arr: Vec<u32>,
+    pub arr: Vec<glam::UVec3>,
 }
 
 pub struct Shader {
@@ -35,28 +31,16 @@ impl Shader {
             gpu.device()
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: Some(Type::min_size()),
-                            },
-                            count: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(OutputType::min_size()),
                         },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                has_dynamic_offset: false,
-                                min_binding_size: Some(Type::min_size()),
-                            },
-                            count: None,
-                        },
-                    ],
+                        count: None,
+                    }],
                 });
 
         let pipeline_layout =
@@ -84,26 +68,11 @@ impl Shader {
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub async fn execute(&self, in_value: &Type) -> Type {
-        // create a buffer for the shader input
-        let mut in_byte_buffer = Vec::new();
-        let mut in_buffer = encase::StorageBuffer::new(&mut in_byte_buffer);
-
-        in_buffer.write(in_value).unwrap();
-
-        let input_buffer =
-            self.gpu
-                .device()
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Input Buffer"),
-                    contents: &in_byte_buffer,
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
-
+    pub async fn execute(&self) -> OutputType {
         // create a buffer for the shader output
         let output_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
-            size: in_byte_buffer.len() as _,
+            size: u64::from(OutputType::min_size()) * 256 * 256,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -111,7 +80,7 @@ impl Shader {
         // create a buffer for the result
         let mapping_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mapping Buffer"),
-            size: in_byte_buffer.len() as _,
+            size: u64::from(OutputType::min_size()) * 256 * 256,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -123,16 +92,10 @@ impl Shader {
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Bind Group"),
                 layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: output_buffer.as_entire_binding(),
-                    },
-                ],
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: output_buffer.as_entire_binding(),
+                }],
             });
 
         // create the command for the graphics card to execute
@@ -154,7 +117,7 @@ impl Shader {
             0,
             &mapping_buffer,
             0,
-            in_byte_buffer.len() as _,
+            u64::from(OutputType::min_size()) * 256 * 256,
         );
 
         // submit the command for processing
@@ -175,7 +138,7 @@ impl Shader {
         let mapping_slice_buffer_view = mapping_slice.get_mapped_range();
 
         // read the result from the view
-        let mut out_value: Type = Type::default();
+        let mut out_value = OutputType::default();
         encase::StorageBuffer::new(mapping_slice_buffer_view.as_ref())
             .read(&mut out_value)
             .unwrap();
@@ -190,34 +153,16 @@ impl Shader {
 
 #[cfg(test)]
 mod tests {
-    use crate::{gpu::GPU, shaders::example};
+    use crate::{gpu::GPU, shaders::ray_tracer};
 
     #[tokio::test]
     async fn test() {
         let gpu = GPU::new().await.unwrap();
 
-        let shader = example::Shader::new(gpu);
+        let shader = ray_tracer::Shader::new(gpu);
 
-        let a_i = example::Type {
-            array_length: encase::ArrayLength,
-            array_length_call_ret_val: 4,
-            a: glam::Vec3::new(5.0, 4.0, 6.0),
-            arr: vec![45, 46, 47, 48, 49],
-        };
-        let b_i = example::Type {
-            array_length: encase::ArrayLength,
-            array_length_call_ret_val: 4,
-            a: glam::Vec3::new(5.0, 4.0, 6.0),
-            arr: vec![45],
-        };
+        let output = shader.execute().await;
 
-        let a_f = shader.execute(&a_i);
-        let b_f = shader.execute(&b_i);
-
-        let b_o = b_f.await;
-        let a_o = a_f.await;
-
-        println!("{:?}", a_o);
-        println!("{:?}", b_o);
+        println!("{:?}", output);
     }
 }
