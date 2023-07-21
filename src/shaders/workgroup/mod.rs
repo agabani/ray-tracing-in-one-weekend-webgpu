@@ -1,6 +1,12 @@
 use encase::ShaderType;
+use wgpu::util::DeviceExt;
 
 use crate::gpu::GPU;
+
+#[derive(Debug, Default, encase::ShaderType)]
+pub struct InputType {
+    pub data_set_size: glam::UVec3,
+}
 
 #[derive(Debug, Default, encase::ShaderType)]
 pub struct OutputType {
@@ -13,17 +19,30 @@ pub struct Shader {
     bind_group_layout: wgpu::BindGroupLayout,
     gpu: GPU,
     pipeline: wgpu::ComputePipeline,
+    workgroup_size: glam::UVec3,
 }
 
 impl Shader {
     #[must_use]
     pub fn new(gpu: GPU) -> Self {
         // create the shader
+        let workgroup_size = glam::UVec3::new(16, 16, 1);
+
         let shader = gpu
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("shader.wgsl")
+                        .replace(
+                            "@workgroup_size(1)",
+                            &format!(
+                                "@workgroup_size({}, {}, {})",
+                                workgroup_size.x, workgroup_size.y, workgroup_size.z
+                            ),
+                        )
+                        .into(),
+                ),
             });
 
         // create the interface for the shader
@@ -31,16 +50,28 @@ impl Shader {
             gpu.device()
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(OutputType::min_size()),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(InputType::min_size()),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(OutputType::min_size()),
+                            },
+                            count: None,
+                        },
+                    ],
                 });
 
         let pipeline_layout =
@@ -64,11 +95,27 @@ impl Shader {
             bind_group_layout,
             gpu,
             pipeline,
+            workgroup_size,
         }
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub async fn execute(&self) -> OutputType {
+    pub async fn execute(&self, in_value: &InputType) -> OutputType {
+        // create a buffer for the shader input
+        let mut in_byte_buffer = Vec::new();
+        let mut in_buffer = encase::StorageBuffer::new(&mut in_byte_buffer);
+
+        in_buffer.write(in_value).unwrap();
+
+        let input_buffer =
+            self.gpu
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Input Buffer"),
+                    contents: &in_byte_buffer,
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
         // create a buffer for the shader output
         let output_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
@@ -92,10 +139,16 @@ impl Shader {
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Bind Group"),
                 layout: &self.bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: output_buffer.as_entire_binding(),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                ],
             });
 
         // create the command for the graphics card to execute
@@ -108,7 +161,18 @@ impl Shader {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(4, 4, 4);
+
+            let mut workgroups = in_value.data_set_size / self.workgroup_size;
+            if in_value.data_set_size.x % self.workgroup_size.x > 0 {
+                workgroups.x += 1;
+            }
+            if in_value.data_set_size.y % self.workgroup_size.y > 0 {
+                workgroups.y += 1;
+            }
+            if in_value.data_set_size.z % self.workgroup_size.z > 0 {
+                workgroups.z += 1;
+            }
+            pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
 
         // create the command for the output gpu buffer to be copied to the output cpu buffer
@@ -161,7 +225,11 @@ mod tests {
 
         let shader = workgroup::Shader::new(gpu);
 
-        let output = shader.execute().await;
+        let output = shader
+            .execute(&workgroup::InputType {
+                data_set_size: glam::UVec3 { x: 4, y: 3, z: 2 },
+            })
+            .await;
 
         println!("{:?}", output);
     }
