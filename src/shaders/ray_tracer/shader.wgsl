@@ -27,19 +27,21 @@ fn main(
         out.pixel_length = in.screen_size.y * in.screen_size.x;
     }
 
-    // calculate pixel color
-    let j = global_id.x;
-    let i = global_id.y;
+    // declare constants
+    let image_width = in.screen_size.x;
+    let image_height = in.screen_size.y;
+    let i = global_id.x;
+    let j = global_id.y;
+    let index = image_width * j + i;
 
-    let r : f32 = f32(i) / f32(in.screen_size.x - 1u);
-    let g : f32 = f32(j) / f32(in.screen_size.y - 1u);
+    // calculate pixel color
+    let r : f32 = f32(i) / f32(image_width - 1u);
+    let g : f32 = f32(j) / f32(image_height - 1u);
     let b : f32 = 0.25f;
 
     let ir : u32 = u32(255.999 * r);
     let ig : u32 = u32(255.999 * g);
     let ib : u32 = u32(255.999 * b);
-
-    let index = in.screen_size.y * j + i;
 
     out.pixel[index] = vec3<u32>(ir, ig, ib);
 }
