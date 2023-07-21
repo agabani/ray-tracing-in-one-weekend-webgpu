@@ -1,29 +1,48 @@
 use encase::ShaderType;
+use wgpu::util::DeviceExt;
 
 use crate::gpu::GPU;
 
 #[derive(Debug, Default, encase::ShaderType)]
+pub struct InputType {
+    pub screen_size: glam::UVec2,
+}
+
+#[derive(Debug, Default, encase::ShaderType)]
 pub struct OutputType {
-    pub array_length: encase::ArrayLength,
+    pub pixel_length: encase::ArrayLength,
     #[size(runtime)]
-    pub arr: Vec<glam::UVec3>,
+    pub pixels: Vec<glam::UVec3>,
 }
 
 pub struct Shader {
     bind_group_layout: wgpu::BindGroupLayout,
     gpu: GPU,
     pipeline: wgpu::ComputePipeline,
+    workgroup_size: glam::UVec3,
 }
 
 impl Shader {
     #[must_use]
     pub fn new(gpu: GPU) -> Self {
         // create the shader
+        let workgroup_size = glam::UVec3::new(16, 16, 1);
+
         let shader = gpu
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("shader.wgsl")
+                        .replace(
+                            "@workgroup_size(1)",
+                            &format!(
+                                "@workgroup_size({}, {}, {})",
+                                workgroup_size.x, workgroup_size.y, workgroup_size.z
+                            ),
+                        )
+                        .into(),
+                ),
             });
 
         // create the interface for the shader
@@ -31,16 +50,28 @@ impl Shader {
             gpu.device()
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(OutputType::min_size()),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(InputType::min_size()),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(OutputType::min_size()),
+                            },
+                            count: None,
+                        },
+                    ],
                 });
 
         let pipeline_layout =
@@ -64,15 +95,33 @@ impl Shader {
             bind_group_layout,
             gpu,
             pipeline,
+            workgroup_size,
         }
     }
 
     #[allow(clippy::missing_panics_doc)]
-    pub async fn execute(&self) -> OutputType {
+    pub async fn execute(&self, in_value: &InputType) -> OutputType {
+        // create a buffer for the shader input
+        let mut in_byte_buffer = Vec::new();
+        let mut in_buffer = encase::StorageBuffer::new(&mut in_byte_buffer);
+
+        in_buffer.write(in_value).unwrap();
+
+        let input_buffer =
+            self.gpu
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Input Buffer"),
+                    contents: &in_byte_buffer,
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
         // create a buffer for the shader output
         let output_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
-            size: u64::from(OutputType::min_size()) * 256 * 256,
+            size: u64::from(OutputType::min_size())
+                * u64::from(in_value.screen_size.x)
+                * u64::from(in_value.screen_size.y),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -80,7 +129,9 @@ impl Shader {
         // create a buffer for the result
         let mapping_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mapping Buffer"),
-            size: u64::from(OutputType::min_size()) * 256 * 256,
+            size: u64::from(OutputType::min_size())
+                * u64::from(in_value.screen_size.x)
+                * u64::from(in_value.screen_size.y),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -92,10 +143,16 @@ impl Shader {
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Bind Group"),
                 layout: &self.bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: output_buffer.as_entire_binding(),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: input_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: output_buffer.as_entire_binding(),
+                    },
+                ],
             });
 
         // create the command for the graphics card to execute
@@ -108,7 +165,19 @@ impl Shader {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(1, 1, 1);
+
+            let screen_size = in_value.screen_size.extend(1);
+            let mut workgroups = screen_size / self.workgroup_size;
+            if screen_size.x % self.workgroup_size.x > 0 {
+                workgroups.x += 1;
+            }
+            if screen_size.y % self.workgroup_size.y > 0 {
+                workgroups.y += 1;
+            }
+            if screen_size.z % self.workgroup_size.z > 0 {
+                workgroups.z += 1;
+            }
+            pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
 
         // create the command for the output gpu buffer to be copied to the output cpu buffer
@@ -117,7 +186,9 @@ impl Shader {
             0,
             &mapping_buffer,
             0,
-            u64::from(OutputType::min_size()) * 256 * 256,
+            u64::from(OutputType::min_size())
+                * u64::from(in_value.screen_size.x)
+                * u64::from(in_value.screen_size.y),
         );
 
         // submit the command for processing
@@ -161,7 +232,11 @@ mod tests {
 
         let shader = ray_tracer::Shader::new(gpu);
 
-        let output = shader.execute().await;
+        let output = shader
+            .execute(&ray_tracer::InputType {
+                screen_size: glam::UVec2 { x: 256, y: 256 },
+            })
+            .await;
 
         println!("{:?}", output);
     }
