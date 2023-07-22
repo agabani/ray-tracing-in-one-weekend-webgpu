@@ -34,6 +34,12 @@ fn reflect(v: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return v - 2.0 * dot(v, n) * n;
 }
 
+fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
+    var r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+    r0 = r0 * r0;
+    return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
+}
+
 fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
     let cos_theta = min(dot(-uv, n), 1.0);
     let r_out_perp =  etai_over_etat * (uv + cos_theta * n);
@@ -193,7 +199,7 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
             let cannot_refract = refraction_ratio * sin_theta > 1.0;
             var direction: vec3<f32>;
 
-            if cannot_refract {
+            if cannot_refract || reflectance(cos_theta, refraction_ratio) > random() {
                 direction = reflect(unit_direction, hit_record.normal);
             } else {
                 direction = refract(unit_direction, hit_record.normal, refraction_ratio);
@@ -299,7 +305,7 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
 }
 
 struct World {
-    objects: array<Sphere, 4>,
+    objects: array<Sphere, 5>,
 }
 
 fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
@@ -332,6 +338,13 @@ fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     if h3.some {
         hit_record = h3;
         closest_so_far = h3.t;
+    }
+
+    // TODO: turn into a loop...
+    let h4 = sphere_hit(world.objects[4], ray, t_min, closest_so_far);
+    if h4.some {
+        hit_record = h4;
+        closest_so_far = h4.t;
     }
 
     return hit_record;
@@ -386,7 +399,8 @@ fn main(
     world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new_lambertian(vec3(0.8, 0.8, 0.0)));
     world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.1, 0.2, 0.5)));
     world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
-    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
+    world.objects[3] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), -0.4, material_new_dielectric(1.5));
+    world.objects[4] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
 
     // Camera
     let camera = camera_new(aspect_ratio);
