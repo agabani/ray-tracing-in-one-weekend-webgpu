@@ -217,9 +217,9 @@ fn write_color(color: vec3<f32>, samples_per_pixel: u32) -> vec3<u32> {
     var b = color.z;
 
     let scale = 1.0 / f32(samples_per_pixel);
-    r *= scale;
-    g *= scale;
-    b *= scale;
+    r = sqrt(scale * r);
+    g = sqrt(scale * g);
+    b = sqrt(scale * b);
 
     let ir : u32 = u32(255.999 * clamp(r, 0.0, 0.999));
     let ig : u32 = u32(255.999 * clamp(g, 0.0, 0.999));
