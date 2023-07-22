@@ -123,6 +123,7 @@ fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: v
 
 struct Material {
     albedo: vec3<f32>,
+    // 0. background
     // 1. lambertian
     // 2. metal
     type_: u32,
@@ -138,7 +139,7 @@ fn material_new(albedo: vec3<f32>, type_: u32) -> Material {
 
 struct MaterialScatterResult {
     some: bool,
-    color: vec3<f32>,
+    attenuation: vec3<f32>,
     scattered: Ray,
 }
 
@@ -161,7 +162,7 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
             return MaterialScatterResult(some, material.albedo, scattered);
         }
         default: {
-            return MaterialScatterResult(false, vec3<f32>(0.0), ray_default());
+            return MaterialScatterResult(false, vec3<f32>(0.0, 0.0, 0.0), ray_default());
         }
     }
 }
@@ -184,33 +185,35 @@ fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
 }
 
 fn ray_color(ray: Ray, world: World) -> vec3<f32> {
-    var rays = array<Ray, 50>();
+    var current_ray = ray;
     var depth = 1u;
-    rays[depth - 1u] = ray;
-    depth += 1u;
+    var material_scatter_results = array<MaterialScatterResult, 50>();
 
-    for (; depth <= 50u; depth = depth + 1u) {
-        let hit_record = world_hit(world, rays[depth - 2u], 0.001, 10000.0);
+    for (; depth <= 50u; depth = depth + 1u){
+        let hit_record = world_hit(world, current_ray, 0.001, 10000.0);
         if hit_record.some {
-            let target_ = hit_record.point + hit_record.normal + random_unit_vector();
-            rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
+            let material_scatter_result = material_scatter(hit_record.material, current_ray, hit_record);
+            material_scatter_results[depth - 1u] = material_scatter_result;
 
-            // ... thinking hard....
-            let result = material_scatter(hit_record.material, rays[depth - 2u], hit_record);
-
+            if material_scatter_result.some {
+                current_ray = material_scatter_result.scattered;
+            } else {
+                break;
+            }
         } else {
             break;
         }
     }
 
-    depth -= 1u;
-    let unit_direction = normalize(rays[depth - 1u].direction);
+    // depth -= 1u;
+    let unit_direction = normalize(current_ray.direction);
     let t = 0.5 * (unit_direction.y + 1.0);
     var color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
     depth -= 1u;
 
     for (; depth > 0u; depth = depth - 1u) {
-        color = 0.5 * color;
+        let material_scatter_results = material_scatter_results[depth - 1u];
+        color = material_scatter_results.attenuation * color;
     }
 
     return color;
@@ -255,7 +258,7 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
 }
 
 struct World {
-    objects: array<Sphere, 2>,
+    objects: array<Sphere, 4>,
 }
 
 fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
@@ -274,6 +277,20 @@ fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     if h1.some {
         hit_record = h1;
         closest_so_far = h1.t;
+    }
+
+    // TODO: turn into a loop...
+    let h2 = sphere_hit(world.objects[2], ray, t_min, closest_so_far);
+    if h2.some {
+        hit_record = h2;
+        closest_so_far = h2.t;
+    }
+
+    // TODO: turn into a loop...
+    let h3 = sphere_hit(world.objects[3], ray, t_min, closest_so_far);
+    if h3.some {
+        hit_record = h3;
+        closest_so_far = h3.t;
     }
 
     return hit_record;
@@ -325,8 +342,10 @@ fn main(
 
     // World
     var world = World();
-    world.objects[0] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new(vec3(0.0), 1u));
-    world.objects[1] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new(vec3(0.0), 1u));
+    world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new(vec3(0.8, 0.8, 0.0), 1u));
+    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new(vec3(0.7, 0.3, 0.3), 1u));
+    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new(vec3(0.8, 0.8, 0.8), 2u));
+    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new(vec3(0.8, 0.6, 0.2), 2u));
 
     // Camera
     let camera = camera_new(aspect_ratio);
