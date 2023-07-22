@@ -402,17 +402,17 @@ fn main(
     let image_width = in.screen_size.x;
     let image_height = in.screen_size.y;
     let aspect_ratio = f32(image_width) / f32(image_height);
-    let samples_per_pixel = 100u;
+    let samples_per_pixel = 200u;
 
     // World
     var world = World(0u);
 
     // Camera
-    let lookfrom = vec3<f32>(3.0, 3.0, 2.0);
-    let lookat = vec3<f32>(0.0, 0.0, -1.0);
+    let lookfrom = vec3<f32>(13.0, 2.0, 3.0);
+    let lookat = vec3<f32>(0.0, 0.0, 0.0);
     let vup = vec3<f32>(0.0, 1.0, 0.0);
-    let dist_to_focus = length(lookfrom - lookat);
-    let aperture = 2.0;
+    let dist_to_focus = 10.0;
+    let aperture = 0.1;
 
     let camera = camera_new(
         lookfrom,
