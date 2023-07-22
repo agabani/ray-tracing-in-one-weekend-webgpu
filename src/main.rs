@@ -1,14 +1,18 @@
+use rand::prelude::*;
 use ray_tracing_in_one_weekend_webgpu::{gpu, shaders::ray_tracer};
 use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
+    let mut rng = rand::thread_rng();
+
     let gpu = gpu::GPU::new().await.unwrap();
 
     let shader = ray_tracer::Shader::new(gpu);
 
     let input = ray_tracer::InputType {
         screen_size: glam::UVec2 { x: 400, y: 225 },
+        random: (0..1_000_000).map(|_| rng.gen()).collect(),
     };
 
     println!("executing");

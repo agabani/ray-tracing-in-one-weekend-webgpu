@@ -1,5 +1,6 @@
 struct InputType {
     screen_size: vec2<u32>,
+    random: array<f32>,
 }
 
 struct OutputType {
@@ -15,6 +16,49 @@ var<storage, read_write> out: OutputType;
 
 fn length_squared(e: vec3<f32>) -> f32 {
     return e.x * e.x + e.y * e.y + e.z * e.z;
+}
+
+var<private> random_index : u32 = 10;
+
+fn random_init(index: u32) {
+    random_index = index;
+}
+
+fn random() -> f32 {
+    if random_index >= arrayLength(&in.random) {
+        random_index = 0u;
+    }
+    let value = in.random[random_index];
+    random_index += 1u;
+    return value;
+}
+
+fn random_between(min: f32, max: f32) -> f32 {
+    return min + (max - min) * random();
+}
+
+struct Camera {
+    origin: vec3<f32>,
+    horizontal: vec3<f32>,
+    vertical: vec3<f32>,
+    lower_left_corner: vec3<f32>,
+}
+
+fn camera_new(aspect_ratio: f32) -> Camera {
+    let viewport_height = 2.0;
+    let viewport_width = aspect_ratio * viewport_height;
+    let focal_length = 1.0;
+
+    let origin = vec3<f32>(0.0, 0.0, 0.0);
+    let horizontal = vec3<f32>(viewport_width, 0.0, 0.0);
+    let vertical = vec3<f32>(0.0, viewport_height, 0.0);
+    let lower_left_corner = origin - horizontal/2.0 - vertical/2.0 - vec3<f32>(0.0, 0.0, focal_length);
+
+    return Camera(origin, horizontal, vertical, lower_left_corner);
+}
+
+fn camera_get_ray(camera: Camera, u: f32, v: f32) -> Ray {
+    return Ray(camera.origin, camera.lower_left_corner + u * camera.horizontal + v * camera.vertical - camera.origin);
 }
 
 struct HitRecord {
@@ -116,11 +160,20 @@ fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     return hit_record;
 }
 
-fn write_color(color: vec3<f32>) -> vec3<u32> {
-    let r : u32 = u32(255.999 * color.x);
-    let g : u32 = u32(255.999 * color.y);
-    let b : u32 = u32(255.999 * color.z);
-    return vec3<u32>(r, g, b);
+fn write_color(color: vec3<f32>, samples_per_pixel: u32) -> vec3<u32> {
+    var r = color.x;
+    var g = color.y;
+    var b = color.z;
+
+    let scale = 1.0 / f32(samples_per_pixel);
+    r *= scale;
+    g *= scale;
+    b *= scale;
+
+    let ir : u32 = u32(255.999 * clamp(r, 0.0, 0.999));
+    let ig : u32 = u32(255.999 * clamp(g, 0.0, 0.999));
+    let ib : u32 = u32(255.999 * clamp(b, 0.0, 0.999));
+    return vec3<u32>(ir, ig, ib);
 }
 
 @compute @workgroup_size(1)
@@ -142,10 +195,14 @@ fn main(
     let j = global_id.y;
     let index = in.screen_size.x * j + i;
 
+    // Initialization
+    random_init(index);
+
     // Image
     let image_width = in.screen_size.x;
     let image_height = in.screen_size.y;
     let aspect_ratio = f32(image_width) / f32(image_height);
+    let samples_per_pixel = 100u;
 
     // World
     var world = World();
@@ -153,21 +210,22 @@ fn main(
     world.objects[1] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0);
 
     // Camera
+    let camera = camera_new(aspect_ratio);
+
     let viewport_height = 2.0;
     let viewport_width = aspect_ratio * viewport_height;
     let focal_length = 1.0;
 
-    let origin = vec3<f32>(0.0, 0.0, 0.0);
-    let horizontal = vec3<f32>(viewport_width, 0.0, 0.0);
-    let vertical = vec3<f32>(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin - horizontal/2.0 - vertical/2.0 - vec3<f32>(0.0, 0.0, focal_length);
-
     // Calculate
-    let u = f32(i) / f32(image_width - 1u);
-    let v = f32(j) / f32(image_height - 1u);
-    let ray = Ray(origin, lower_left_corner + u * horizontal + v * vertical - origin);
-    let pixel_color = ray_color(ray, world);
+    var pixel_color = vec3<f32>(0.0, 0.0, 0.0);
+
+    for (var s = 0u; s < samples_per_pixel; s = s + 1u) {
+        let u = (f32(i) + random()) / f32(image_width - 1u);
+        let v = (f32(j) + random()) / f32(image_height - 1u);
+        let ray = camera_get_ray(camera, u, v);
+        pixel_color += ray_color(ray, world);
+    }
 
     // Save
-    out.pixel[index] = write_color(pixel_color);
+    out.pixel[index] = write_color(pixel_color, samples_per_pixel);
 }

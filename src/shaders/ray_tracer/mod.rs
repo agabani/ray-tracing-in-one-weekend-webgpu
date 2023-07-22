@@ -6,6 +6,8 @@ use crate::gpu::GPU;
 #[derive(Debug, Default, encase::ShaderType)]
 pub struct InputType {
     pub screen_size: glam::UVec2,
+    #[size(runtime)]
+    pub random: Vec<f32>,
 }
 
 #[derive(Debug, Default, encase::ShaderType)]
@@ -235,6 +237,7 @@ mod tests {
         let output = shader
             .execute(&ray_tracer::InputType {
                 screen_size: glam::UVec2 { x: 256, y: 256 },
+                random: vec![],
             })
             .await;
 
