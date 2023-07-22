@@ -185,9 +185,21 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
             if hit_record.front_face {
                 refraction_ratio = 1.0 / material.index_of_refraction;
             }
+
             let unit_direction = normalize(ray_in.direction);
-            let refracted = refract(unit_direction, hit_record.normal, refraction_ratio);
-            let scattered = ray_new(hit_record.point, refracted);
+            let cos_theta = min(dot(-unit_direction, hit_record.normal), 1.0);
+            let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+            let cannot_refract = refraction_ratio * sin_theta > 1.0;
+            var direction: vec3<f32>;
+
+            if cannot_refract {
+                direction = reflect(unit_direction, hit_record.normal);
+            } else {
+                direction = refract(unit_direction, hit_record.normal, refraction_ratio);
+            }
+
+            let scattered = ray_new(hit_record.point, direction);
             return MaterialScatterResult(true, attenuation, scattered);
         }
         default: {
@@ -372,11 +384,9 @@ fn main(
     // World
     var world = World();
     world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new_lambertian(vec3(0.8, 0.8, 0.0)));
-    // world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.7, 0.3, 0.3)));
-    // world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.8, 0.8), 0.3));
-    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
+    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.1, 0.2, 0.5)));
     world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
-    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 1.0));
+    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
 
     // Camera
     let camera = camera_new(aspect_ratio);
