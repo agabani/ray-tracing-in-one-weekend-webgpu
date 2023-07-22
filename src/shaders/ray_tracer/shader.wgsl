@@ -63,6 +63,10 @@ fn random_in_unit_sphere() -> vec3<f32> {
     return p;
 }
 
+fn random_unit_vector() -> vec3<f32> {
+    return normalize(random_in_unit_sphere());
+}
+
 struct Camera {
     origin: vec3<f32>,
     horizontal: vec3<f32>,
@@ -124,7 +128,7 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
     for (; depth <= 50u; depth = depth + 1u) {
         let hit_record = world_hit(world, rays[depth - 2u], 0.001, 10000.0);
         if hit_record.some {
-            let target_ = hit_record.point + hit_record.normal + random_in_unit_sphere();
+            let target_ = hit_record.point + hit_record.normal + random_unit_vector();
             rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
         } else {
             break;
