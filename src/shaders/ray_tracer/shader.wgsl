@@ -22,6 +22,7 @@ var<private> random_index : u32 = 10;
 
 fn random_init(index: u32) {
     random_index = index;
+    random_index = u32(random() * f32(arrayLength(&in.random)));
 }
 
 fn random() -> f32 {
