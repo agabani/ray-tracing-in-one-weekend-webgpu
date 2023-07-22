@@ -91,7 +91,7 @@ impl Shader {
     #[must_use]
     pub fn new(gpu: GPU) -> Self {
         // create the shader
-        let workgroup_size = glam::UVec3::new(16, 16, 1);
+        let workgroup_size = glam::UVec3::new(8, 8, 1);
 
         let shader = gpu
             .device()

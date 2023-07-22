@@ -322,14 +322,14 @@ fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
 
 fn ray_color(ray: Ray, world: World) -> vec3<f32> {
     var current_ray = ray;
-    var depth = 1u;
+    var depth = 0i;
     var material_scatter_results = array<MaterialScatterResult, 50>();
 
-    for (; depth <= 50u; depth = depth + 1u){
+    for (; depth < 50i; depth = depth + 1i){
         let hit_record = world_hit(world, current_ray, 0.001, 10000.0);
         if hit_record.some {
             let material_scatter_result = material_scatter(hit_record.material, current_ray, hit_record);
-            material_scatter_results[depth - 1u] = material_scatter_result;
+            material_scatter_results[depth] = material_scatter_result;
 
             if material_scatter_result.some {
                 current_ray = material_scatter_result.scattered;
@@ -341,14 +341,13 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
         }
     }
 
-    // depth -= 1u;
     let unit_direction = normalize(current_ray.direction);
     let t = 0.5 * (unit_direction.y + 1.0);
     var color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
-    depth -= 1u;
+    depth -= 1i;
 
-    for (; depth > 0u; depth = depth - 1u) {
-        let material_scatter_results = material_scatter_results[depth - 1u];
+    for (; depth >= 0i; depth = depth - 1i) {
+        let material_scatter_results = material_scatter_results[depth];
         color = material_scatter_results.attenuation * color;
     }
 
@@ -501,7 +500,7 @@ fn main(
     let focal_length = 1.0;
 
     // Calculate
-    var pixel_color = vec3<f32>(0.0, 0.0, 0.0);
+    var pixel_color = vec3<f32>();
 
     for (var s = 0u; s < samples_per_pixel; s = s + 1u) {
         let u = (f32(i) + random()) / f32(image_width - 1u);
