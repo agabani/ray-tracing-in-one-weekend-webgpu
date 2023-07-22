@@ -34,6 +34,13 @@ fn reflect(v: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return v - 2.0 * dot(v, n) * n;
 }
 
+fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
+    let cos_theta = min(dot(-uv, n), 1.0);
+    let r_out_perp =  etai_over_etat * (uv + cos_theta * n);
+    let r_out_parallel = -sqrt(abs(1.0 - length_squared(r_out_perp))) * n;
+    return r_out_perp + r_out_parallel;
+}
+
 var<private> random_index : u32 = 10;
 
 fn random_init(index: u32) {
@@ -126,20 +133,26 @@ struct Material {
     // 0. background
     // 1. lambertian
     // 2. metal
+    // 3. dielectric
     type_: u32,
     fuzz: f32,
+    index_of_refraction: f32,
 }
 
 fn material_default() -> Material {
-    return Material(vec3<f32>(), 0u, 0.0);
+    return Material(vec3<f32>(), 0u, 0.0, 0.0);
 }
 
 fn material_new_lambertian(albedo: vec3<f32>) -> Material {
-    return Material(albedo, 1u, 0.0);
+    return Material(albedo, 1u, 0.0, 0.0);
 }
 
 fn material_new_metal(albedo: vec3<f32>, fuzz: f32) -> Material {
-    return Material(albedo, 2u, fuzz);
+    return Material(albedo, 2u, fuzz, 0.0);
+}
+
+fn material_new_dielectric(index_of_refraction: f32) -> Material {
+    return Material(vec3<f32>(1.0, 1.0, 1.0), 3u, 0.0, index_of_refraction);
 }
 
 struct MaterialScatterResult {
@@ -165,6 +178,17 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
             let scattered = ray_new(hit_record.point, reflected + material.fuzz * random_in_unit_sphere());
             let some = dot(scattered.direction, hit_record.normal) >  0.0;
             return MaterialScatterResult(some, material.albedo, scattered);
+        }
+        case 3u: {
+            let attenuation = vec3<f32>(1.0, 1.0, 1.0);
+            var refraction_ratio = material.index_of_refraction;
+            if hit_record.front_face {
+                refraction_ratio = 1.0 / material.index_of_refraction;
+            }
+            let unit_direction = normalize(ray_in.direction);
+            let refracted = refract(unit_direction, hit_record.normal, refraction_ratio);
+            let scattered = ray_new(hit_record.point, refracted);
+            return MaterialScatterResult(true, attenuation, scattered);
         }
         default: {
             return MaterialScatterResult(false, vec3<f32>(0.0, 0.0, 0.0), ray_default());
@@ -348,8 +372,10 @@ fn main(
     // World
     var world = World();
     world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new_lambertian(vec3(0.8, 0.8, 0.0)));
-    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.7, 0.3, 0.3)));
-    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.8, 0.8), 0.3));
+    // world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.7, 0.3, 0.3)));
+    // world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.8, 0.8), 0.3));
+    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
+    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
     world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 1.0));
 
     // Camera
