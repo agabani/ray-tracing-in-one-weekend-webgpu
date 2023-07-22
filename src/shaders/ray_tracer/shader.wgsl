@@ -1,5 +1,6 @@
 struct InputType {
     screen_size: vec2<u32>,
+    spheres: array<Sphere>,
 }
 
 struct OutputType {
@@ -341,46 +342,19 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
 }
 
 struct World {
-    objects: array<Sphere, 5>,
+    a: u32,
 }
 
 fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     var hit_record = HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, material_default());
     var closest_so_far = t_max;
 
-    // TODO: turn into a loop...
-    let h0 = sphere_hit(world.objects[0], ray, t_min, closest_so_far);
-    if h0.some {
-        hit_record = h0;
-        closest_so_far = h0.t;
-    }
-
-    // TODO: turn into a loop...
-    let h1 = sphere_hit(world.objects[1], ray, t_min, closest_so_far);
-    if h1.some {
-        hit_record = h1;
-        closest_so_far = h1.t;
-    }
-
-    // TODO: turn into a loop...
-    let h2 = sphere_hit(world.objects[2], ray, t_min, closest_so_far);
-    if h2.some {
-        hit_record = h2;
-        closest_so_far = h2.t;
-    }
-
-    // TODO: turn into a loop...
-    let h3 = sphere_hit(world.objects[3], ray, t_min, closest_so_far);
-    if h3.some {
-        hit_record = h3;
-        closest_so_far = h3.t;
-    }
-
-    // TODO: turn into a loop...
-    let h4 = sphere_hit(world.objects[4], ray, t_min, closest_so_far);
-    if h4.some {
-        hit_record = h4;
-        closest_so_far = h4.t;
+    for (var index = 0u; index < arrayLength(&in.spheres); index = index + 1u) {
+        let h = sphere_hit(in.spheres[index], ray, t_min, closest_so_far);
+        if h.some {
+            hit_record = h;
+            closest_so_far = h.t;
+        }
     }
 
     return hit_record;
@@ -431,12 +405,7 @@ fn main(
     let samples_per_pixel = 100u;
 
     // World
-    var world = World();
-    world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new_lambertian(vec3(0.8, 0.8, 0.0)));
-    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.1, 0.2, 0.5)));
-    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_dielectric(1.5));
-    world.objects[3] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), -0.4, material_new_dielectric(1.5));
-    world.objects[4] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
+    var world = World(0u);
 
     // Camera
     let lookfrom = vec3<f32>(3.0, 3.0, 2.0);

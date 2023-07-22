@@ -7,6 +7,64 @@ use crate::gpu::GPU;
 #[derive(Debug, Default, encase::ShaderType)]
 pub struct InputType {
     pub screen_size: glam::UVec2,
+
+    #[size(runtime)]
+    pub spheres: Vec<InputTypeSphere>,
+}
+
+#[derive(Debug, Default, encase::ShaderType)]
+pub struct InputTypeSphere {
+    pub center: glam::Vec3,
+    pub radius: f32,
+    pub material: InputTypeMaterial,
+}
+
+#[derive(Debug, Default, encase::ShaderType)]
+pub struct InputTypeMaterial {
+    albedo: glam::Vec3,
+    // 0. background
+    // 1. lambertian
+    // 2. metal
+    // 3. dielectric
+    type_: u32,
+    fuzz: f32,
+    index_of_refraction: f32,
+}
+
+impl InputTypeMaterial {
+    #[must_use]
+    pub fn new_lambertian(albedo: glam::Vec3) -> Self {
+        Self {
+            albedo,
+            type_: 1,
+            fuzz: 0.0,
+            index_of_refraction: 0.0,
+        }
+    }
+
+    #[must_use]
+    pub fn new_metal(albedo: glam::Vec3, fuzz: f32) -> Self {
+        Self {
+            albedo,
+            type_: 2,
+            fuzz,
+            index_of_refraction: 0.0,
+        }
+    }
+
+    #[must_use]
+    pub fn new_dielectric(index_of_refraction: f32) -> Self {
+        Self {
+            albedo: glam::Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            type_: 3,
+            fuzz: 0.0,
+            index_of_refraction,
+        }
+    }
 }
 
 #[derive(Debug, Default, encase::ShaderType)]
@@ -277,6 +335,7 @@ mod tests {
         let output = shader
             .execute(&ray_tracer::InputType {
                 screen_size: glam::UVec2 { x: 256, y: 256 },
+                spheres: Vec::new(),
             })
             .await;
 

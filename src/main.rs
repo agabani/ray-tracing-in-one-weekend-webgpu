@@ -9,6 +9,68 @@ async fn main() {
 
     let input = ray_tracer::InputType {
         screen_size: glam::UVec2 { x: 400, y: 225 },
+        spheres: vec![
+            ray_tracer::InputTypeSphere {
+                center: glam::Vec3 {
+                    x: 0.0,
+                    y: -100.5,
+                    z: -1.0,
+                },
+                radius: 100.0,
+                material: ray_tracer::InputTypeMaterial::new_lambertian(glam::Vec3 {
+                    x: 0.8,
+                    y: 0.8,
+                    z: 0.0,
+                }),
+            },
+            ray_tracer::InputTypeSphere {
+                center: glam::Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: -1.0,
+                },
+                radius: 0.5,
+                material: ray_tracer::InputTypeMaterial::new_lambertian(glam::Vec3 {
+                    x: 0.1,
+                    y: 0.2,
+                    z: 0.5,
+                }),
+            },
+            ray_tracer::InputTypeSphere {
+                center: glam::Vec3 {
+                    x: -1.0,
+                    y: 0.0,
+                    z: -1.0,
+                },
+                radius: 0.5,
+                material: ray_tracer::InputTypeMaterial::new_dielectric(1.5),
+            },
+            ray_tracer::InputTypeSphere {
+                center: glam::Vec3 {
+                    x: -1.0,
+                    y: 0.0,
+                    z: -1.0,
+                },
+                radius: -0.4,
+                material: ray_tracer::InputTypeMaterial::new_dielectric(1.5),
+            },
+            ray_tracer::InputTypeSphere {
+                center: glam::Vec3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: -1.0,
+                },
+                radius: 0.5,
+                material: ray_tracer::InputTypeMaterial::new_metal(
+                    glam::Vec3 {
+                        x: 0.8,
+                        y: 0.6,
+                        z: 0.2,
+                    },
+                    0.0,
+                ),
+            },
+        ],
     };
 
     println!("executing");
