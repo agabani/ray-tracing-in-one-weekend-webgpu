@@ -97,15 +97,20 @@ struct Camera {
     lower_left_corner: vec3<f32>,
 }
 
-fn camera_new(aspect_ratio: f32) -> Camera {
-    let viewport_height = 2.0;
+fn camera_new(lookfrom: vec3<f32>, lookat: vec3<f32>, vup: vec3<f32>, vfov: f32, aspect_ratio: f32) -> Camera {
+    let theta = radians(vfov);
+    let h = tan(theta / 2.0);
+    let viewport_height = 2.0 * h;
     let viewport_width = aspect_ratio * viewport_height;
-    let focal_length = 1.0;
 
-    let origin = vec3<f32>(0.0, 0.0, 0.0);
-    let horizontal = vec3<f32>(viewport_width, 0.0, 0.0);
-    let vertical = vec3<f32>(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin - horizontal/2.0 - vertical/2.0 - vec3<f32>(0.0, 0.0, focal_length);
+    let w = normalize(lookfrom - lookat);
+    let u = normalize(cross(vup, w));
+    let v = cross(w, u);
+
+    let origin = lookfrom;
+    let horizontal = viewport_width * u;
+    let vertical = viewport_height * v;
+    let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - w;
 
     return Camera(origin, horizontal, vertical, lower_left_corner);
 }
@@ -403,7 +408,7 @@ fn main(
     world.objects[4] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
 
     // Camera
-    let camera = camera_new(aspect_ratio);
+    let camera = camera_new(vec3<f32>(-2.0, 2.0, 1.0), vec3<f32>(0.0, 0.0, -1.0), vec3<f32>(0.0, 1.0, 0.0), 20.0, aspect_ratio);
 
     let viewport_height = 2.0;
     let viewport_width = aspect_ratio * viewport_height;
