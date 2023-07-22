@@ -13,17 +13,21 @@ var<storage> in: InputType;
 @group(0) @binding(1)
 var<storage, read_write> out: OutputType;
 
+fn length_squared(e: vec3<f32>) -> f32 {
+    return e.x * e.x + e.y * e.y + e.z * e.z;
+}
+
 fn hit_sphere(center: vec3<f32>, radius: f32, ray: Ray) -> f32 {
     let oc = ray.origin - center;
-    let a = dot(ray.direction, ray.direction);
-    let b = 2.0 * dot(oc, ray.direction);
-    let c = dot(oc, oc) - radius * radius;
-    let discriminant = b * b - 4.0 * a * c;
+    let a = length_squared(ray.direction);
+    let half_b = dot(oc, ray.direction);
+    let c = length_squared(oc) - (radius * radius);
+    let discriminant = (half_b * half_b) - (a * c);
 
     if discriminant < 0.0 {
         return -1.0;
     } else {
-        let normal = (-b - sqrt(discriminant)) / (2.0 * a);
+        let normal = (-half_b - sqrt(discriminant)) / a;
         return normal;
     }
 }
