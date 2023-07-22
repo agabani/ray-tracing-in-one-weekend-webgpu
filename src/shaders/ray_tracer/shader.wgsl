@@ -100,6 +100,14 @@ fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: v
     return HitRecord(hit_record.some, hit_record.point, normal, hit_record.t, front_face);
 }
 
+fn hit_record_z_fighting_correction(hit_record: HitRecord, positive: bool) -> vec3<f32> {
+    if positive {
+        return hit_record.point + hit_record.normal * 0.0001f;
+    } else {
+        return hit_record.point - hit_record.normal * 0.0001f;
+    }
+}
+
 struct Ray {
     origin: vec3<f32>,
     direction: vec3<f32>,
@@ -119,7 +127,8 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
         let hit_record = world_hit(world, rays[depth - 2u], 0.0, 10000.0);
         if hit_record.some {
             let target_ = hit_record.point + hit_record.normal + random_in_unit_sphere();
-            rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
+            let hit_record_point = hit_record_z_fighting_correction(hit_record, true);
+            rays[depth - 1u] = Ray(hit_record_point, target_ - hit_record.point);
         } else {
             break;
         }
