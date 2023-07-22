@@ -122,7 +122,7 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
     depth += 1u;
 
     for (; depth <= 50u; depth = depth + 1u) {
-        let hit_record = world_hit(world, rays[depth - 2u], 0.0, 10000.0);
+        let hit_record = world_hit(world, rays[depth - 2u], 0.001, 10000.0);
         if hit_record.some {
             let target_ = hit_record.point + hit_record.normal + random_in_unit_sphere();
             rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
