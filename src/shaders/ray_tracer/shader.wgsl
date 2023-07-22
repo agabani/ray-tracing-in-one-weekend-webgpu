@@ -37,6 +37,25 @@ fn random_between(min: f32, max: f32) -> f32 {
     return min + (max - min) * random();
 }
 
+fn random_vec3() -> vec3<f32> {
+    return vec3<f32>(random(), random(), random());
+}
+
+fn random_vec3_between(min: f32, max: f32) -> vec3<f32> {
+    return vec3<f32>(random_between(min, max), random_between(min, max), random_between(min, max));
+}
+
+fn random_in_unit_sphere() -> vec3<f32> {
+    var p = vec3<f32>(0.0, 0.0, 0.0);
+    loop {
+        p = random_vec3_between(-1.0, 1.0);
+        if length_squared(p) < 1.0 {
+            break;
+        }
+    }
+    return p;
+}
+
 struct Camera {
     origin: vec3<f32>,
     horizontal: vec3<f32>,
@@ -90,15 +109,31 @@ fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
 }
 
 fn ray_color(ray: Ray, world: World) -> vec3<f32> {
-    let hit_record = world_hit(world, ray, 0.0, 10000.0);
-    if hit_record.some {
-        let color = 0.5 * (hit_record.normal + vec3<f32>(1.0, 1.0, 1.0));
-        return color;
+    var rays = array<Ray, 50>();
+    var depth = 1u;
+    rays[depth - 1u] = ray;
+    depth += 1u;
+
+    for (; depth <= 50u; depth = depth + 1u) {
+        let hit_record = world_hit(world, rays[depth - 2u], 0.0, 10000.0);
+        if hit_record.some {
+            let target_ = hit_record.point + hit_record.normal + random_in_unit_sphere();
+            rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
+        } else {
+            break;
+        }
     }
 
-    let unit_direction = normalize(ray.direction);
+    depth -= 1u;
+    let unit_direction = normalize(rays[depth - 1u].direction);
     let t = 0.5 * (unit_direction.y + 1.0);
-    let color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+    var color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+    depth -= 1u;
+
+    for (; depth > 0u; depth = depth - 1u) {
+        color = 0.5 * color;
+    }
+
     return color;
 }
 
