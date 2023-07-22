@@ -56,8 +56,7 @@ fn reflect(v: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
 }
 
 fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
-    var r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
-    r0 = r0 * r0;
+    let r0 = pow((1.0 - ref_idx) / (1.0 + ref_idx), 2.0);
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
 }
 
@@ -94,7 +93,7 @@ fn random_init(index: u32) {
 }
 
 fn random_in_unit_disk() -> vec3<f32> {
-    var p = vec3<f32>(0.0, 0.0, 0.0);
+    var p: vec3<f32>;
     loop {
         p = vec3<f32>(random_between(-1.0, 1.0), random_between(-1.0, 1.0), 0.0);
         if length_squared(p) < 1.0 {
@@ -105,7 +104,7 @@ fn random_in_unit_disk() -> vec3<f32> {
 }
 
 fn random_in_unit_sphere() -> vec3<f32> {
-    var p = vec3<f32>(0.0, 0.0, 0.0);
+    var p: vec3<f32>;
     loop {
         p = random_vec3_between(-1.0, 1.0);
         if length_squared(p) < 1.0 {
@@ -175,7 +174,7 @@ fn camera_get_ray(camera: Camera, s: f32, t: f32) -> Ray {
     let rd = camera.lens_radius * random_in_unit_disk();
     let offset = camera.u * rd.x + camera.v * rd.y;
 
-    return Ray(
+    return ray_new(
         camera.origin + offset,
         camera.lower_left_corner + s * camera.horizontal + t * camera.vertical - camera.origin - offset
     );
@@ -193,6 +192,14 @@ struct HitRecord {
     t: f32,
     front_face: bool,
     material: Material,
+}
+
+fn hit_record_new_some(point: vec3<f32>, normal: vec3<f32>, t: f32, front_face: bool, material: Material) -> HitRecord {
+    return HitRecord(true, point, normal, t, front_face, material);
+}
+
+fn hit_record_new_none() -> HitRecord {
+    return HitRecord(false, vec3<f32>(), vec3<f32>(), 0.0, false, material_default());
 }
 
 fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: vec3<f32>) -> HitRecord {
@@ -371,7 +378,7 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     let discriminant = (half_b * half_b) - (a * c);
 
     if discriminant < 0.0 {
-        return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, sphere.material);
+        return hit_record_new_none();
     }
 
     let sqrtd = sqrt(discriminant);
@@ -379,7 +386,7 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     if root < t_min || t_max < root {
         root = (-half_b + sqrtd) / a;
         if root < t_min || t_max < root {
-            return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, sphere.material);
+            return hit_record_new_none();
         }
     }
 
@@ -401,7 +408,7 @@ struct World {
 }
 
 fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
-    var hit_record = HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, material_default());
+    var hit_record = hit_record_new_none();
     var closest_so_far = t_max;
 
     for (var index = 0u; index < arrayLength(&in.spheres); index = index + 1u) {
