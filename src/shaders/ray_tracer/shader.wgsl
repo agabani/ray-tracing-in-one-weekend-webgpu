@@ -1,26 +1,46 @@
+/*
+ * ============================================================================
+ * Input Storage Buffer
+ * ============================================================================
+ */
 struct InputType {
     screen_size: vec2<u32>,
     spheres: array<Sphere>,
 }
 
+@group(0) @binding(0)
+var<storage> in: InputType;
+
+/*
+ * ============================================================================
+ * Output Storage Buffer
+ * ============================================================================
+ */
 struct OutputType {
     pixel_length: u32,
     pixel: array<vec3<u32>>,
 }
 
+@group(0) @binding(1)
+var<storage, read_write> out: OutputType;
+
+/*
+ * ============================================================================
+ * Random Storage Buffer
+ * ============================================================================
+ */
 struct RandomType {
     values: array<f32>,
 }
 
-@group(0) @binding(0)
-var<storage> in: InputType;
-
-@group(0) @binding(1)
-var<storage, read_write> out: OutputType;
-
 @group(0) @binding(2)
 var<storage> random_type: RandomType;
 
+/*
+ * ============================================================================
+ * Mathematical Functions
+ * ============================================================================
+ */
 fn length_squared(e: vec3<f32>) -> f32 {
     return e.x * e.x + e.y * e.y + e.z * e.z;
 }
@@ -48,12 +68,12 @@ fn refract(uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32) -> vec3<f32> {
     return r_out_perp + r_out_parallel;
 }
 
-var<private> random_index : u32 = 10;
-
-fn random_init(index: u32) {
-    random_index = index;
-    random_index = u32(random() * f32(arrayLength(&random_type.values)));
-}
+/*
+ * ============================================================================
+ * Random Functions
+ * ============================================================================
+ */
+var<private> random_index : u32 = 0;
 
 fn random() -> f32 {
     if random_index >= arrayLength(&random_type.values) {
@@ -68,12 +88,9 @@ fn random_between(min: f32, max: f32) -> f32 {
     return min + (max - min) * random();
 }
 
-fn random_vec3() -> vec3<f32> {
-    return vec3<f32>(random(), random(), random());
-}
-
-fn random_vec3_between(min: f32, max: f32) -> vec3<f32> {
-    return vec3<f32>(random_between(min, max), random_between(min, max), random_between(min, max));
+fn random_init(index: u32) {
+    random_index = index;
+    random_index = u32(random() * f32(arrayLength(&random_type.values)));
 }
 
 fn random_in_unit_disk() -> vec3<f32> {
@@ -102,6 +119,19 @@ fn random_unit_vector() -> vec3<f32> {
     return normalize(random_in_unit_sphere());
 }
 
+fn random_vec3() -> vec3<f32> {
+    return vec3<f32>(random(), random(), random());
+}
+
+fn random_vec3_between(min: f32, max: f32) -> vec3<f32> {
+    return vec3<f32>(random_between(min, max), random_between(min, max), random_between(min, max));
+}
+
+/*
+ * ============================================================================
+ * Camera
+ * ============================================================================
+ */
 struct Camera {
     origin: vec3<f32>,
     horizontal: vec3<f32>,
@@ -151,6 +181,11 @@ fn camera_get_ray(camera: Camera, s: f32, t: f32) -> Ray {
     );
 }
 
+/*
+ * ============================================================================
+ * Hit Record
+ * ============================================================================
+ */
 struct HitRecord {
     some: bool,
     point: vec3<f32>,
@@ -171,6 +206,11 @@ fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: v
     return HitRecord(hit_record.some, hit_record.point, normal, hit_record.t, front_face, hit_record.material);
 }
 
+/*
+ * ============================================================================
+ * Material
+ * ============================================================================
+ */
 struct Material {
     albedo: vec3<f32>,
     // 0. background
@@ -251,6 +291,11 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
     }
 }
 
+/*
+ * ============================================================================
+ * Ray
+ * ============================================================================
+ */
 struct Ray {
     origin: vec3<f32>,
     direction: vec3<f32>,
@@ -303,6 +348,11 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
     return color;
 }
 
+/*
+ * ============================================================================
+ * Sphere
+ * ============================================================================
+ */
 struct Sphere {
     center: vec3<f32>,
     radius: f32,
@@ -341,6 +391,11 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     return hit_record;
 }
 
+/*
+ * ============================================================================
+ * World
+ * ============================================================================
+ */
 struct World {
     a: u32,
 }
@@ -360,6 +415,11 @@ fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     return hit_record;
 }
 
+/*
+ * ============================================================================
+ * Write
+ * ============================================================================
+ */
 fn write_color(color: vec3<f32>, samples_per_pixel: u32) -> vec3<u32> {
     var r = color.x;
     var g = color.y;
@@ -376,6 +436,11 @@ fn write_color(color: vec3<f32>, samples_per_pixel: u32) -> vec3<u32> {
     return vec3<u32>(ir, ig, ib);
 }
 
+/*
+ * ============================================================================
+ * Main
+ * ============================================================================
+ */
 @compute @workgroup_size(1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
