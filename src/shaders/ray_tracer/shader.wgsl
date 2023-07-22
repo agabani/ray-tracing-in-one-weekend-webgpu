@@ -127,14 +127,19 @@ struct Material {
     // 1. lambertian
     // 2. metal
     type_: u32,
+    fuzz: f32,
 }
 
 fn material_default() -> Material {
-    return Material(vec3<f32>(), 0u);
+    return Material(vec3<f32>(), 0u, 0.0);
 }
 
-fn material_new(albedo: vec3<f32>, type_: u32) -> Material {
-    return Material(albedo, type_);
+fn material_new_lambertian(albedo: vec3<f32>) -> Material {
+    return Material(albedo, 1u, 0.0);
+}
+
+fn material_new_metal(albedo: vec3<f32>, fuzz: f32) -> Material {
+    return Material(albedo, 2u, fuzz);
 }
 
 struct MaterialScatterResult {
@@ -157,7 +162,7 @@ fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> M
         }
         case 2u: {
             let reflected = reflect(normalize(ray_in.direction), hit_record.normal);
-            let scattered = ray_new(hit_record.point, reflected);
+            let scattered = ray_new(hit_record.point, reflected + material.fuzz * random_in_unit_sphere());
             let some = dot(scattered.direction, hit_record.normal) >  0.0;
             return MaterialScatterResult(some, material.albedo, scattered);
         }
@@ -342,10 +347,10 @@ fn main(
 
     // World
     var world = World();
-    world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new(vec3(0.8, 0.8, 0.0), 1u));
-    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new(vec3(0.7, 0.3, 0.3), 1u));
-    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new(vec3(0.8, 0.8, 0.8), 2u));
-    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new(vec3(0.8, 0.6, 0.2), 2u));
+    world.objects[0] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new_lambertian(vec3(0.8, 0.8, 0.0)));
+    world.objects[1] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new_lambertian(vec3(0.7, 0.3, 0.3)));
+    world.objects[2] = Sphere(vec3<f32>(-1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.8, 0.8), 0.3));
+    world.objects[3] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 1.0));
 
     // Camera
     let camera = camera_new(aspect_ratio);
