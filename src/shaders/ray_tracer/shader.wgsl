@@ -75,6 +75,17 @@ fn random_vec3_between(min: f32, max: f32) -> vec3<f32> {
     return vec3<f32>(random_between(min, max), random_between(min, max), random_between(min, max));
 }
 
+fn random_in_unit_disk() -> vec3<f32> {
+    var p = vec3<f32>(0.0, 0.0, 0.0);
+    loop {
+        p = vec3<f32>(random_between(-1.0, 1.0), random_between(-1.0, 1.0), 0.0);
+        if length_squared(p) < 1.0 {
+            break;
+        }
+    }
+    return p;
+}
+
 fn random_in_unit_sphere() -> vec3<f32> {
     var p = vec3<f32>(0.0, 0.0, 0.0);
     loop {
@@ -95,9 +106,21 @@ struct Camera {
     horizontal: vec3<f32>,
     vertical: vec3<f32>,
     lower_left_corner: vec3<f32>,
+    u: vec3<f32>,
+    v: vec3<f32>,
+    w: vec3<f32>,
+    lens_radius: f32,
 }
 
-fn camera_new(lookfrom: vec3<f32>, lookat: vec3<f32>, vup: vec3<f32>, vfov: f32, aspect_ratio: f32) -> Camera {
+fn camera_new(
+    lookfrom: vec3<f32>,
+    lookat: vec3<f32>,
+    vup: vec3<f32>,
+    vfov: f32,
+    aspect_ratio: f32,
+    aperture: f32,
+    focus_dist: f32,
+) -> Camera {
     let theta = radians(vfov);
     let h = tan(theta / 2.0);
     let viewport_height = 2.0 * h;
@@ -108,15 +131,23 @@ fn camera_new(lookfrom: vec3<f32>, lookat: vec3<f32>, vup: vec3<f32>, vfov: f32,
     let v = cross(w, u);
 
     let origin = lookfrom;
-    let horizontal = viewport_width * u;
-    let vertical = viewport_height * v;
-    let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - w;
+    let horizontal = focus_dist * viewport_width * u;
+    let vertical = focus_dist * viewport_height * v;
+    let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - focus_dist * w;
 
-    return Camera(origin, horizontal, vertical, lower_left_corner);
+    let lens_radius = aperture / 2.0;
+
+    return Camera(origin, horizontal, vertical, lower_left_corner, u, v, w, lens_radius);
 }
 
-fn camera_get_ray(camera: Camera, u: f32, v: f32) -> Ray {
-    return Ray(camera.origin, camera.lower_left_corner + u * camera.horizontal + v * camera.vertical - camera.origin);
+fn camera_get_ray(camera: Camera, s: f32, t: f32) -> Ray {
+    let rd = camera.lens_radius * random_in_unit_disk();
+    let offset = camera.u * rd.x + camera.v * rd.y;
+
+    return Ray(
+        camera.origin + offset,
+        camera.lower_left_corner + s * camera.horizontal + t * camera.vertical - camera.origin - offset
+    );
 }
 
 struct HitRecord {
@@ -408,7 +439,21 @@ fn main(
     world.objects[4] = Sphere(vec3<f32>(1.0, 0.0, -1.0), 0.5, material_new_metal(vec3(0.8, 0.6, 0.2), 0.0));
 
     // Camera
-    let camera = camera_new(vec3<f32>(-2.0, 2.0, 1.0), vec3<f32>(0.0, 0.0, -1.0), vec3<f32>(0.0, 1.0, 0.0), 20.0, aspect_ratio);
+    let lookfrom = vec3<f32>(3.0, 3.0, 2.0);
+    let lookat = vec3<f32>(0.0, 0.0, -1.0);
+    let vup = vec3<f32>(0.0, 1.0, 0.0);
+    let dist_to_focus = length(lookfrom - lookat);
+    let aperture = 2.0;
+
+    let camera = camera_new(
+        lookfrom,
+        lookat,
+        vup,
+        20.0,
+        aspect_ratio,
+        aperture,
+        dist_to_focus
+    );
 
     let viewport_height = 2.0;
     let viewport_width = aspect_ratio * viewport_height;
