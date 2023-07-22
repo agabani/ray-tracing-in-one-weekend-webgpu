@@ -1,4 +1,5 @@
 use encase::ShaderType;
+use rand::Rng;
 use wgpu::util::DeviceExt;
 
 use crate::gpu::GPU;
@@ -6,8 +7,6 @@ use crate::gpu::GPU;
 #[derive(Debug, Default, encase::ShaderType)]
 pub struct InputType {
     pub screen_size: glam::UVec2,
-    #[size(runtime)]
-    pub random: Vec<f32>,
 }
 
 #[derive(Debug, Default, encase::ShaderType)]
@@ -15,6 +14,12 @@ pub struct OutputType {
     pub pixel_length: encase::ArrayLength,
     #[size(runtime)]
     pub pixels: Vec<glam::UVec3>,
+}
+
+#[derive(Debug, Default, encase::ShaderType)]
+struct RandomType {
+    #[size(runtime)]
+    values: Vec<f32>,
 }
 
 pub struct Shader {
@@ -73,6 +78,16 @@ impl Shader {
                             },
                             count: None,
                         },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(RandomType::min_size()),
+                            },
+                            count: None,
+                        },
                     ],
                 });
 
@@ -101,6 +116,7 @@ impl Shader {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     #[allow(clippy::missing_panics_doc)]
     pub async fn execute(&self, in_value: &InputType) -> OutputType {
         // create a buffer for the shader input
@@ -128,6 +144,26 @@ impl Shader {
             mapped_at_creation: false,
         });
 
+        // create a buffer for the shader random
+        let mut rng = rand::thread_rng();
+        let random_value = RandomType {
+            values: (0..1_000_000).map(|_| rng.gen()).collect(),
+        };
+
+        let mut random_byte_buffer = Vec::new();
+        let mut random_buffer = encase::StorageBuffer::new(&mut random_byte_buffer);
+
+        random_buffer.write(&random_value).unwrap();
+
+        let random_buffer =
+            self.gpu
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Random Buffer"),
+                    contents: &random_byte_buffer,
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+
         // create a buffer for the result
         let mapping_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mapping Buffer"),
@@ -153,6 +189,10 @@ impl Shader {
                     wgpu::BindGroupEntry {
                         binding: 1,
                         resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: random_buffer.as_entire_binding(),
                     },
                 ],
             });
@@ -237,7 +277,6 @@ mod tests {
         let output = shader
             .execute(&ray_tracer::InputType {
                 screen_size: glam::UVec2 { x: 256, y: 256 },
-                random: vec![],
             })
             .await;
 

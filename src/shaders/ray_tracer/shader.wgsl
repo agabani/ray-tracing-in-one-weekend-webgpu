@@ -1,6 +1,5 @@
 struct InputType {
     screen_size: vec2<u32>,
-    random: array<f32>,
 }
 
 struct OutputType {
@@ -8,11 +7,18 @@ struct OutputType {
     pixel: array<vec3<u32>>,
 }
 
+struct RandomType {
+    values: array<f32>,
+}
+
 @group(0) @binding(0)
 var<storage> in: InputType;
 
 @group(0) @binding(1)
 var<storage, read_write> out: OutputType;
+
+@group(0) @binding(2)
+var<storage> random_type: RandomType;
 
 fn length_squared(e: vec3<f32>) -> f32 {
     return e.x * e.x + e.y * e.y + e.z * e.z;
@@ -22,14 +28,14 @@ var<private> random_index : u32 = 10;
 
 fn random_init(index: u32) {
     random_index = index;
-    random_index = u32(random() * f32(arrayLength(&in.random)));
+    random_index = u32(random() * f32(arrayLength(&random_type.values)));
 }
 
 fn random() -> f32 {
-    if random_index >= arrayLength(&in.random) {
+    if random_index >= arrayLength(&random_type.values) {
         random_index = 0u;
     }
-    let value = in.random[random_index];
+    let value = random_type.values[random_index];
     random_index += 1u;
     return value;
 }
