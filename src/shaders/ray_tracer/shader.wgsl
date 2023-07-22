@@ -24,6 +24,16 @@ fn length_squared(e: vec3<f32>) -> f32 {
     return e.x * e.x + e.y * e.y + e.z * e.z;
 }
 
+fn near_zero(e: vec3<f32>) -> bool {
+    let s = 0.00000001;
+    let a = abs(e);
+    return a.x < s && a.y < s && a.z < s;
+}
+
+fn reflect(v: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    return v - 2.0 * dot(v, n) * n;
+}
+
 var<private> random_index : u32 = 10;
 
 fn random_init(index: u32) {
@@ -97,6 +107,7 @@ struct HitRecord {
     normal: vec3<f32>,
     t: f32,
     front_face: bool,
+    material: Material,
 }
 
 fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: vec3<f32>) -> HitRecord {
@@ -107,12 +118,65 @@ fn hit_record_set_face_normal(hit_record: HitRecord, ray: Ray, outward_normal: v
     } else {
         normal = -outward_normal;
     }
-    return HitRecord(hit_record.some, hit_record.point, normal, hit_record.t, front_face);
+    return HitRecord(hit_record.some, hit_record.point, normal, hit_record.t, front_face, hit_record.material);
+}
+
+struct Material {
+    albedo: vec3<f32>,
+    // 1. lambertian
+    // 2. metal
+    type_: u32,
+}
+
+fn material_default() -> Material {
+    return Material(vec3<f32>(), 0u);
+}
+
+fn material_new(albedo: vec3<f32>, type_: u32) -> Material {
+    return Material(albedo, type_);
+}
+
+struct MaterialScatterResult {
+    some: bool,
+    color: vec3<f32>,
+    scattered: Ray,
+}
+
+fn material_scatter(material: Material, ray_in: Ray, hit_record: HitRecord) -> MaterialScatterResult {
+    switch material.type_ {
+        case 1u: {
+            var scatter_direction = hit_record.normal + random_unit_vector();
+
+            if near_zero(scatter_direction) {
+                scatter_direction = hit_record.normal;
+            }
+
+            let scattered = ray_new(hit_record.point, scatter_direction);
+            return MaterialScatterResult(true, material.albedo, scattered);
+        }
+        case 2u: {
+            let reflected = reflect(normalize(ray_in.direction), hit_record.normal);
+            let scattered = ray_new(hit_record.point, reflected);
+            let some = dot(scattered.direction, hit_record.normal) >  0.0;
+            return MaterialScatterResult(some, material.albedo, scattered);
+        }
+        default: {
+            return MaterialScatterResult(false, vec3<f32>(0.0), ray_default());
+        }
+    }
 }
 
 struct Ray {
     origin: vec3<f32>,
     direction: vec3<f32>,
+}
+
+fn ray_default() -> Ray {
+    return Ray(vec3<f32>(0.0), vec3<f32>(0.0));
+}
+
+fn ray_new(origin: vec3<f32>, direction: vec3<f32>) -> Ray {
+    return Ray(origin, direction);
 }
 
 fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
@@ -130,6 +194,10 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
         if hit_record.some {
             let target_ = hit_record.point + hit_record.normal + random_unit_vector();
             rays[depth - 1u] = Ray(hit_record.point, target_ - hit_record.point);
+
+            // ... thinking hard....
+            let result = material_scatter(hit_record.material, rays[depth - 2u], hit_record);
+
         } else {
             break;
         }
@@ -151,6 +219,11 @@ fn ray_color(ray: Ray, world: World) -> vec3<f32> {
 struct Sphere {
     center: vec3<f32>,
     radius: f32,
+    material: Material,
+}
+
+fn sphere_new(center: vec3<f32>, radius: f32, material: Material) -> Sphere {
+    return Sphere(center, radius, material);
 }
 
 fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
@@ -161,7 +234,7 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     let discriminant = (half_b * half_b) - (a * c);
 
     if discriminant < 0.0 {
-        return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false);
+        return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, sphere.material);
     }
 
     let sqrtd = sqrt(discriminant);
@@ -169,14 +242,14 @@ fn sphere_hit(sphere: Sphere, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
     if root < t_min || t_max < root {
         root = (-half_b + sqrtd) / a;
         if root < t_min || t_max < root {
-            return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false);
+            return HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, sphere.material);
         }
     }
 
     let rec_t = root;
     let rec_p = ray_at(ray, rec_t);
     let outward_normal = (rec_p - sphere.center) / sphere.radius;
-    var hit_record = HitRecord(true, rec_p, vec3(0.0), rec_t, false);
+    var hit_record = HitRecord(true, rec_p, vec3(0.0), rec_t, false, sphere.material);
     hit_record = hit_record_set_face_normal(hit_record, ray, outward_normal);
     return hit_record;
 }
@@ -186,7 +259,7 @@ struct World {
 }
 
 fn world_hit(world: World, ray: Ray, t_min: f32, t_max: f32) -> HitRecord {
-    var hit_record = HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false);
+    var hit_record = HitRecord(false, vec3(0.0), vec3(0.0), 0.0, false, material_default());
     var closest_so_far = t_max;
 
     // TODO: turn into a loop...
@@ -252,8 +325,8 @@ fn main(
 
     // World
     var world = World();
-    world.objects[0] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5);
-    world.objects[1] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0);
+    world.objects[0] = Sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, material_new(vec3(0.0), 1u));
+    world.objects[1] = Sphere(vec3<f32>(0.0, -100.5, -1.0), 100.0, material_new(vec3(0.0), 1u));
 
     // Camera
     let camera = camera_new(aspect_ratio);
