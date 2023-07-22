@@ -13,6 +13,29 @@ var<storage> in: InputType;
 @group(0) @binding(1)
 var<storage, read_write> out: OutputType;
 
+struct Ray {
+    origin: vec3<f32>,
+    direction: vec3<f32>,
+}
+
+fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
+    return ray.origin + t * ray.direction;
+}
+
+fn ray_color(ray: Ray) -> vec3<f32> {
+    let unit_direction = normalize(ray.direction);
+    let t = 0.5 * (unit_direction.y + 1.0);
+    let color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+    return color;
+}
+
+fn write_color(color: vec3<f32>) -> vec3<u32> {
+    let r : u32 = u32(255.999 * color.x);
+    let g : u32 = u32(255.999 * color.y);
+    let b : u32 = u32(255.999 * color.z);
+    return vec3<u32>(r, g, b);
+}
+
 @compute @workgroup_size(1)
 fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -48,14 +71,11 @@ fn main(
     let lower_left_corner = origin - horizontal/2.0 - vertical/2.0 - vec3<f32>(0.0, 0.0, focal_length);
 
     // Calculate
-    let r : f32 = f32(i) / f32(image_width - 1u);
-    let g : f32 = f32(j) / f32(image_height - 1u);
-    let b : f32 = 0.25f;
-
-    let ir : u32 = u32(255.999 * r);
-    let ig : u32 = u32(255.999 * g);
-    let ib : u32 = u32(255.999 * b);
+    let u = f32(i) / f32(image_width - 1u);
+    let v = f32(j) / f32(image_height - 1u);
+    let ray = Ray(origin, lower_left_corner + u * horizontal + v * vertical - origin);
+    let pixel_color = ray_color(ray);
 
     // Save
-    out.pixel[index] = vec3<u32>(ir, ig, ib);
+    out.pixel[index] = write_color(pixel_color);
 }

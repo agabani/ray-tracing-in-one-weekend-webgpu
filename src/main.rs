@@ -8,7 +8,7 @@ async fn main() {
     let shader = ray_tracer::Shader::new(gpu);
 
     let input = ray_tracer::InputType {
-        screen_size: glam::UVec2 { x: 256, y: 128 },
+        screen_size: glam::UVec2 { x: 400, y: 225 },
     };
 
     println!("executing");
