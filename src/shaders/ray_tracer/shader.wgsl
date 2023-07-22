@@ -13,6 +13,15 @@ var<storage> in: InputType;
 @group(0) @binding(1)
 var<storage, read_write> out: OutputType;
 
+fn hit_sphere(center: vec3<f32>, radius: f32, ray: Ray) -> bool {
+    let oc = ray.origin - center;
+    let a = dot(ray.direction, ray.direction);
+    let b = 2.0 * dot(oc, ray.direction);
+    let c = dot(oc, oc) - radius * radius;
+    let discriminant = b * b - 4.0 * a * c;
+    return discriminant > 0.0;
+}
+
 struct Ray {
     origin: vec3<f32>,
     direction: vec3<f32>,
@@ -23,6 +32,10 @@ fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
 }
 
 fn ray_color(ray: Ray) -> vec3<f32> {
+    if hit_sphere(vec3<f32>(0.0, 0.0, -1.0), 0.5, ray) {
+        return vec3<f32>(1.0, 0.0, 0.0);
+    }
+
     let unit_direction = normalize(ray.direction);
     let t = 0.5 * (unit_direction.y + 1.0);
     let color = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
