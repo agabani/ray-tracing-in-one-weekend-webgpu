@@ -461,13 +461,13 @@ fn main(
 
     // Pixel Space
     if global_id.x == 0u && global_id.y == 0u && global_id.z == 0u {
-        out.pixel_length = in.screen_size.y * in.screen_size.x;
+        out.pixel_length = in.view_box_size.y * in.view_box_size.x;
     }
 
     // Invocation
     let i = in.view_box_position.x + global_id.x;
     let j = in.view_box_position.y + global_id.y;
-    let index = in.view_box_size.x * j + i;
+    let index = in.view_box_size.x * global_id.y + global_id.x;
 
     // Initialization
     random_init(index);

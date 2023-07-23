@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 
 use crate::gpu::GPU;
 
-#[derive(Debug, Default, encase::ShaderType)]
+#[derive(Clone, Debug, Default, encase::ShaderType)]
 pub struct InputType {
     pub samples_per_pixel: u32,
 
@@ -18,14 +18,14 @@ pub struct InputType {
     pub spheres: Vec<InputTypeSphere>,
 }
 
-#[derive(Debug, Default, encase::ShaderType)]
+#[derive(Clone, Debug, Default, encase::ShaderType)]
 pub struct InputTypeSphere {
     pub center: glam::Vec3,
     pub radius: f32,
     pub material: InputTypeMaterial,
 }
 
-#[derive(Debug, Default, encase::ShaderType)]
+#[derive(Clone, Debug, Default, encase::ShaderType)]
 pub struct InputTypeMaterial {
     albedo: glam::Vec3,
     // 0. background
@@ -283,6 +283,7 @@ impl Shader {
             if view_box_size.z % self.workgroup_size.z > 0 {
                 workgroups.z += 1;
             }
+
             pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
 
@@ -325,6 +326,64 @@ impl Shader {
         mapping_buffer.unmap();
 
         out_value
+    }
+
+    pub async fn execute_in_chunks(&self, in_value: &InputType) -> OutputType {
+        let chunk_size = glam::UVec2 { x: 64, y: 64 };
+        let chunks = in_value.view_box_size / chunk_size;
+        let remainder = in_value.view_box_size % chunk_size;
+
+        let mut output = OutputType {
+            pixel_length: encase::ArrayLength,
+            pixels: vec![
+                glam::UVec3::default();
+                (in_value.screen_size.y * in_value.screen_size.x) as usize
+            ],
+        };
+
+        for chunk_y in 0..=chunks.y {
+            for chunk_x in 0..=chunks.x {
+                let view_box_position = glam::UVec2 {
+                    x: in_value.view_box_position.x + chunk_x * chunk_size.x,
+                    y: in_value.view_box_position.y + chunk_y * chunk_size.y,
+                };
+                let view_box_size = glam::UVec2 {
+                    x: if chunk_x < chunks.x {
+                        chunk_size.x
+                    } else {
+                        remainder.x
+                    },
+                    y: if chunk_y < chunks.y {
+                        chunk_size.y
+                    } else {
+                        remainder.y
+                    },
+                };
+
+                if view_box_size.x > 0 && view_box_size.y > 0 {
+                    let i = InputType {
+                        view_box_position,
+                        view_box_size,
+                        ..in_value.clone()
+                    };
+
+                    let output_chunk = self.execute(&i).await;
+
+                    let x_offset = chunk_x * chunk_size.x;
+                    let y_offset = chunk_y * chunk_size.y;
+                    let x_max = in_value.view_box_size.x;
+
+                    for y in 0..view_box_size.y {
+                        for x in 0..view_box_size.x {
+                            output.pixels[((y + y_offset) * x_max + (x + x_offset)) as usize] =
+                                output_chunk.pixels[(y * view_box_size.x + x) as usize];
+                        }
+                    }
+                }
+            }
+        }
+
+        output
     }
 }
 
