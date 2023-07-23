@@ -5,6 +5,8 @@
  */
 struct InputType {
     screen_size: vec2<u32>,
+    view_box_position: vec2<u32>,
+    view_box_size: vec2<u32>,
     spheres: array<Sphere>,
 }
 
@@ -452,7 +454,7 @@ fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
 ) {
     // Exit
-    if global_id.x >= in.screen_size.x || global_id.y >= in.screen_size.y || global_id.z >= 1u {
+    if global_id.x >= in.view_box_size.x || global_id.y >= in.view_box_size.y || global_id.z >= 1u {
         return;
     }
 
@@ -462,9 +464,9 @@ fn main(
     }
 
     // Invocation
-    let i = global_id.x;
-    let j = global_id.y;
-    let index = in.screen_size.x * j + i;
+    let i = in.view_box_position.x + global_id.x;
+    let j = in.view_box_position.y + global_id.y;
+    let index = in.view_box_size.x * j + i;
 
     // Initialization
     random_init(index);

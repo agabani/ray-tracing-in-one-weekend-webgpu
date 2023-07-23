@@ -8,6 +8,10 @@ use crate::gpu::GPU;
 pub struct InputType {
     pub screen_size: glam::UVec2,
 
+    pub view_box_position: glam::UVec2,
+
+    pub view_box_size: glam::UVec2,
+
     #[size(runtime)]
     pub spheres: Vec<InputTypeSphere>,
 }
@@ -196,8 +200,8 @@ impl Shader {
         let output_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
             size: u64::from(OutputType::min_size())
-                * u64::from(in_value.screen_size.x)
-                * u64::from(in_value.screen_size.y),
+                * u64::from(in_value.view_box_size.x)
+                * u64::from(in_value.view_box_size.y),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -226,8 +230,8 @@ impl Shader {
         let mapping_buffer = self.gpu.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mapping Buffer"),
             size: u64::from(OutputType::min_size())
-                * u64::from(in_value.screen_size.x)
-                * u64::from(in_value.screen_size.y),
+                * u64::from(in_value.view_box_size.x)
+                * u64::from(in_value.view_box_size.y),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -266,15 +270,15 @@ impl Shader {
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
 
-            let screen_size = in_value.screen_size.extend(1);
-            let mut workgroups = screen_size / self.workgroup_size;
-            if screen_size.x % self.workgroup_size.x > 0 {
+            let view_box_size = in_value.view_box_size.extend(1);
+            let mut workgroups = view_box_size / self.workgroup_size;
+            if view_box_size.x % self.workgroup_size.x > 0 {
                 workgroups.x += 1;
             }
-            if screen_size.y % self.workgroup_size.y > 0 {
+            if view_box_size.y % self.workgroup_size.y > 0 {
                 workgroups.y += 1;
             }
-            if screen_size.z % self.workgroup_size.z > 0 {
+            if view_box_size.z % self.workgroup_size.z > 0 {
                 workgroups.z += 1;
             }
             pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
@@ -287,8 +291,8 @@ impl Shader {
             &mapping_buffer,
             0,
             u64::from(OutputType::min_size())
-                * u64::from(in_value.screen_size.x)
-                * u64::from(in_value.screen_size.y),
+                * u64::from(in_value.view_box_size.x)
+                * u64::from(in_value.view_box_size.y),
         );
 
         // submit the command for processing
@@ -335,6 +339,8 @@ mod tests {
         let output = shader
             .execute(&ray_tracer::InputType {
                 screen_size: glam::UVec2 { x: 256, y: 256 },
+                view_box_position: glam::UVec2 { x: 0, y: 0 },
+                view_box_size: glam::UVec2 { x: 256, y: 256 },
                 spheres: Vec::new(),
             })
             .await;

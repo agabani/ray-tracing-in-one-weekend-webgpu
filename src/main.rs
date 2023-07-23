@@ -10,6 +10,8 @@ async fn main() {
 
     let input = ray_tracer::InputType {
         screen_size: glam::UVec2 { x: 400, y: 225 },
+        view_box_position: glam::UVec2 { x: 0, y: 0 },
+        view_box_size: glam::UVec2 { x: 400, y: 225 },
         spheres: random_scene(),
     };
 
@@ -20,13 +22,17 @@ async fn main() {
     println!("saving");
     let mut file = tokio::fs::File::create("image.ppm").await.unwrap();
     file.write_all(
-        format!("P3\n{} {}\n255\n", input.screen_size.x, input.screen_size.y).as_bytes(),
+        format!(
+            "P3\n{} {}\n255\n",
+            input.view_box_size.x, input.view_box_size.y
+        )
+        .as_bytes(),
     )
     .await
     .unwrap();
-    for y in (0..input.screen_size.y).rev() {
-        for x in 0..input.screen_size.x {
-            let index = y * input.screen_size.x + x;
+    for y in (0..input.view_box_size.y).rev() {
+        for x in 0..input.view_box_size.x {
+            let index = y * input.view_box_size.x + x;
             let pixel = output.pixels[index as usize];
             file.write_all(format!("{} {} {}\n", pixel.x, pixel.y, pixel.z).as_bytes())
                 .await
