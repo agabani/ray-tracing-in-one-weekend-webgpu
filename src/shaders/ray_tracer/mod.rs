@@ -6,6 +6,8 @@ use crate::gpu::GPU;
 
 #[derive(Debug, Default, encase::ShaderType)]
 pub struct InputType {
+    pub samples_per_pixel: u32,
+
     pub screen_size: glam::UVec2,
 
     pub view_box_position: glam::UVec2,
@@ -338,6 +340,7 @@ mod tests {
 
         let output = shader
             .execute(&ray_tracer::InputType {
+                samples_per_pixel: 100,
                 screen_size: glam::UVec2 { x: 256, y: 256 },
                 view_box_position: glam::UVec2 { x: 0, y: 0 },
                 view_box_size: glam::UVec2 { x: 256, y: 256 },

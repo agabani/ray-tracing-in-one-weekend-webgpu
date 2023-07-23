@@ -4,6 +4,7 @@
  * ============================================================================
  */
 struct InputType {
+    samples_per_pixel: u32,
     screen_size: vec2<u32>,
     view_box_position: vec2<u32>,
     view_box_size: vec2<u32>,
@@ -475,7 +476,7 @@ fn main(
     let image_width = in.screen_size.x;
     let image_height = in.screen_size.y;
     let aspect_ratio = f32(image_width) / f32(image_height);
-    let samples_per_pixel = 200u;
+    let samples_per_pixel = in.samples_per_pixel;
 
     // World
     var world = World(0u);
