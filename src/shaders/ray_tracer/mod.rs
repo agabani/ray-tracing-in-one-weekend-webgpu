@@ -1,3 +1,4 @@
+use chrono::Utc;
 use encase::ShaderType;
 use rand::Rng;
 use wgpu::util::DeviceExt;
@@ -328,10 +329,18 @@ impl Shader {
         out_value
     }
 
-    pub async fn execute_in_chunks(&self, in_value: &InputType) -> OutputType {
-        let chunk_size = glam::UVec2 { x: 64, y: 64 };
+    pub async fn execute_in_chunks(
+        &self,
+        in_value: &InputType,
+        chunk_size: glam::UVec2,
+    ) -> OutputType {
+        println!("[{:?}] executing in chunks", Utc::now().to_string());
+
         let chunks = in_value.view_box_size / chunk_size;
         let remainder = in_value.view_box_size % chunk_size;
+
+        println!("[{:?}] chuck size {:?}", Utc::now().to_string(), chunk_size);
+        println!("[{:?}] total chucks {:?}", Utc::now().to_string(), chunks);
 
         let mut output = OutputType {
             pixel_length: encase::ArrayLength,
@@ -341,13 +350,8 @@ impl Shader {
             ],
         };
 
-        println!("chuck size {:?}", chunk_size);
-        println!("total chucks {:?}", chunks);
-
         for chunk_y in 0..=chunks.y {
             for chunk_x in 0..=chunks.x {
-                println!("processing chuck {chunk_x} {chunk_y}");
-
                 let view_box_position = glam::UVec2 {
                     x: in_value.view_box_position.x + chunk_x * chunk_size.x,
                     y: in_value.view_box_position.y + chunk_y * chunk_size.y,
@@ -372,7 +376,21 @@ impl Shader {
                         ..in_value.clone()
                     };
 
+                    println!(
+                        "[{:?}] executing chuck {chunk_x}/{} {chunk_y}/{}",
+                        Utc::now().to_string(),
+                        chunks.x,
+                        chunks.y
+                    );
+
                     let output_chunk = self.execute(&i).await;
+
+                    println!(
+                        "[{:?}] executed chuck {chunk_x}/{} {chunk_y}/{}",
+                        Utc::now().to_string(),
+                        chunks.x,
+                        chunks.y
+                    );
 
                     let x_offset = chunk_x * chunk_size.x;
                     let y_offset = chunk_y * chunk_size.y;
@@ -387,6 +405,8 @@ impl Shader {
                 }
             }
         }
+
+        println!("[{:?}] executed in chunks", Utc::now().to_string());
 
         output
     }

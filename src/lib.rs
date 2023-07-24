@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 
+pub mod cli;
 pub mod gpu;
 pub mod shaders;
 

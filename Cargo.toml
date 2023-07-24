@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = "0.4.26"
+clap = { version = "4.3.19", features = ["derive"] }
 encase = { version = "0.6.1", features = ["glam"] }
 glam = "0.24.1"
 rand = "0.8.5"

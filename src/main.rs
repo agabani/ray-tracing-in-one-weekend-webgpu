@@ -1,26 +1,54 @@
+use chrono::Utc;
 use rand::{rngs::ThreadRng, Rng};
-use ray_tracing_in_one_weekend_webgpu::{gpu, shaders::ray_tracer};
+use ray_tracing_in_one_weekend_webgpu::{cli, gpu, shaders::ray_tracer};
 use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
-    let gpu = gpu::GPU::new().await.unwrap();
-
-    let shader = ray_tracer::Shader::new(gpu);
+    let cli = cli::parse();
 
     let input = ray_tracer::InputType {
-        samples_per_pixel: 500,
-        screen_size: glam::UVec2 { x: 1920, y: 1080 },
-        view_box_position: glam::UVec2 { x: 0, y: 0 },
-        view_box_size: glam::UVec2 { x: 1920, y: 1080 },
+        samples_per_pixel: cli.samples_per_pixel,
+        screen_size: cli::str_to_vec2(&cli.screen_size),
+        view_box_position: cli
+            .view_box_position
+            .map_or(glam::UVec2 { x: 0, y: 0 }, |f| cli::str_to_vec2(&f)),
+        view_box_size: cli.view_box_size.map_or_else(
+            || cli::str_to_vec2(&cli.screen_size),
+            |f| cli::str_to_vec2(&f),
+        ),
         spheres: random_scene(),
     };
+    let chunk_size = cli::str_to_vec2(&cli.chunk_size);
 
-    println!("executing");
-    let output = shader.execute_in_chunks(&input).await;
-    println!("executed");
+    println!(
+        "[{:?}] samples per pixel {:?}",
+        Utc::now().to_string(),
+        input.samples_per_pixel
+    );
+    println!(
+        "[{:?}] screen size {:?}",
+        Utc::now().to_string(),
+        input.screen_size
+    );
+    println!(
+        "[{:?}] view box position {:?}",
+        Utc::now().to_string(),
+        input.view_box_position
+    );
+    println!(
+        "[{:?}] view box size {:?}",
+        Utc::now().to_string(),
+        input.view_box_size
+    );
+    println!("[{:?}] output {:?}", Utc::now().to_string(), cli.output);
 
-    println!("saving");
+    let gpu = gpu::GPU::new().await.unwrap();
+    let shader = ray_tracer::Shader::new(gpu);
+
+    let output = shader.execute_in_chunks(&input, chunk_size).await;
+
+    println!("[{:?}] saving image", Utc::now().to_string());
     let mut file = tokio::fs::File::create("image.ppm").await.unwrap();
     file.write_all(
         format!(
@@ -41,7 +69,7 @@ async fn main() {
         }
     }
     file.flush().await.unwrap();
-    println!("saved");
+    println!("[{:?}] saved image", Utc::now().to_string());
 }
 
 fn random_scene() -> Vec<ray_tracer::InputTypeSphere> {
