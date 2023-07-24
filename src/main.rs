@@ -9,10 +9,10 @@ async fn main() {
     let shader = ray_tracer::Shader::new(gpu);
 
     let input = ray_tracer::InputType {
-        samples_per_pixel: 200,
-        screen_size: glam::UVec2 { x: 400, y: 224 },
+        samples_per_pixel: 500,
+        screen_size: glam::UVec2 { x: 1920, y: 1080 },
         view_box_position: glam::UVec2 { x: 0, y: 0 },
-        view_box_size: glam::UVec2 { x: 400, y: 224 },
+        view_box_size: glam::UVec2 { x: 1920, y: 1080 },
         spheres: random_scene(),
     };
 

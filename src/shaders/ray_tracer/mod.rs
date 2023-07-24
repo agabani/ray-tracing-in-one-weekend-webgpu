@@ -341,8 +341,13 @@ impl Shader {
             ],
         };
 
+        println!("chuck size {:?}", chunk_size);
+        println!("total chucks {:?}", chunks);
+
         for chunk_y in 0..=chunks.y {
             for chunk_x in 0..=chunks.x {
+                println!("processing chuck {chunk_x} {chunk_y}");
+
                 let view_box_position = glam::UVec2 {
                     x: in_value.view_box_position.x + chunk_x * chunk_size.x,
                     y: in_value.view_box_position.y + chunk_y * chunk_size.y,
